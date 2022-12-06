@@ -64,24 +64,22 @@ contract CreditManager is Ownable, Pausable, ReentrancyGuard {
         address creditAccount = _accountFactory.takeCreditAccount(
             borrowedAmount,
             IPoolService(poolService).calcLinearCumulative_RAY()
-        ); // T:[CM-5]
+        );
 
-        // Initializes enabled tokens for the account. Enabled tokens is a bit mask which
-        // holds information which tokens were used by user
         creditFilter.initEnabledTokens(creditAccount);
 
         // Transfer pool tokens to new credit account
         IPoolService(poolService).lendCreditAccount(
             borrowedAmount,
             creditAccount
-        ); // T:[CM-7]
+        );
 
         // Transfer borrower own fund to credit account
         IERC20(underlyingToken).safeTransferFrom(
             msg.sender,
             creditAccount,
             amount
-        ); // T:[CM-6]
+        );
 
         // link credit account address with borrower address
         creditAccounts[onBehalfOf] = creditAccount;
