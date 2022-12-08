@@ -9,6 +9,7 @@ import "../tokens/DieselToken.sol";
 import "../interfaces/IInterestRateModel.sol";
 import "../interfaces/ICreditManager.sol";
 import "../libraries/helpers/Constants.sol";
+import "hardhat/console.sol";
 
 contract PoolService is Ownable, Pausable, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -69,7 +70,8 @@ contract PoolService is Ownable, Pausable, ReentrancyGuard {
     event NewCreditManagerConnected(address indexed creditManager);
     event UncoveredLoss(address indexed creditManager, uint256 loss);
 
-    ///@dev need to deploy diesel token address and interest model first
+    // ! need to deploy diesel token address and interest model first
+
     ///@param _underlyingToken put uni token : 0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984
     constructor(
         address _treasuryAddress,
@@ -114,7 +116,6 @@ contract PoolService is Ownable, Pausable, ReentrancyGuard {
             balanceBefore;
 
         DieselToken(dieselToken).mint(onBehalfOf, toDiesel(amount));
-
         _expectedLiquidityLU = _expectedLiquidityLU + amount;
         _updateBorrowRate(0);
 
@@ -337,7 +338,6 @@ contract PoolService is Ownable, Pausable, ReentrancyGuard {
     function _updateBorrowRate(uint256 loss) internal {
         // Update total _expectedLiquidityLU
         _expectedLiquidityLU = expectedLiquidity() - loss;
-
         // update borrow APY, constant RAY is 1e27, so 5% = 5 * 1e25
         borrowAPY_RAY = interestRateModel.calcBorrowRate();
         _timestampLU = block.timestamp;

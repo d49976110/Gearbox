@@ -20,7 +20,7 @@ contract CreditFilter is Ownable, Pausable, ReentrancyGuard {
     mapping(address => uint256) public fastCheckCounter;
 
     modifier creditManagerOnly() {
-        require(msg.sender == creditManager, "CF_CREDIT_MANAGERS_ONLY");
+        require(msg.sender == creditManager, "CREDIT_MANAGERS_ONLY");
         _;
     }
 
@@ -31,7 +31,7 @@ contract CreditFilter is Ownable, Pausable, ReentrancyGuard {
     {
         // at opening account underlying token is enabled only
         enabledTokens[creditAccount] = 1;
-        fastCheckCounter[creditAccount] = 1;
+        // fastCheckCounter[creditAccount] = 1;
     }
 
     ///@dev connect to credit manager
@@ -74,8 +74,8 @@ contract CreditFilter is Ownable, Pausable, ReentrancyGuard {
             uint256 tvw
         )
     {
-        token = allowedTokens[id]; // T:[CF-28]
-        balance = IERC20(token).balanceOf(creditAccount); // T:[CF-28]
+        token = allowedTokens[id];
+        balance = IERC20(token).balanceOf(creditAccount);
 
         // balance ==0 : T: [CF-28]
         // if (balance > 1) {
