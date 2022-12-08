@@ -37,7 +37,6 @@ contract AccountFactory is Ownable, Pausable, ReentrancyGuard {
     }
 
     constructor() {
-        // todo : build credit account contract
         masterCreditAccount = address(new CreditAccount());
         CreditAccount(masterCreditAccount).initialize();
 

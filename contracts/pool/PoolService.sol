@@ -278,6 +278,8 @@ contract PoolService is Ownable, Pausable, ReentrancyGuard {
         return IERC20(underlyingToken).balanceOf(address(this));
     }
 
+    // amount / dieselRate
+    // like compound exchange rate
     function toDiesel(uint256 amount) public view returns (uint256) {
         return (amount * Constants.RAY) / getDieselRate_RAY();
     }
@@ -289,9 +291,12 @@ contract PoolService is Ownable, Pausable, ReentrancyGuard {
     }
 
     // rate = expected liquidity / diesel tokens supply
+    // expected liquidity will increase by time because expected liquidity = _expectedLiquidityLU + interestAccrued
     function getDieselRate_RAY() public view returns (uint256) {
         uint256 dieselSupply = IERC20(dieselToken).totalSupply();
+
         if (dieselSupply == 0) return Constants.RAY;
+
         return (expectedLiquidity() * Constants.RAY) / dieselSupply;
     }
 

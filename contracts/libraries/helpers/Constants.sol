@@ -23,4 +23,7 @@ library Constants {
 
     // Liquidation premium 5% = 9500
     uint256 constant LIQUIDATION_DISCOUNTED_SUM = 9500;
+
+    uint256 constant UNDERLYING_TOKEN_LIQUIDATION_THRESHOLD =
+        LIQUIDATION_DISCOUNTED_SUM - FEE_LIQUIDATION;
 }

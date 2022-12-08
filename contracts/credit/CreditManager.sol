@@ -61,7 +61,7 @@ contract CreditManager is Ownable, Pausable, ReentrancyGuard {
         _;
     }
 
-    ///@dev need to pool service, credit fliter first , account factory
+    // ! need to deploy pool service, credit fliter , account factory
     ///@param _defaultSwapContract : uniswap v2 router 0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D
     constructor(
         uint256 _minAmount,
@@ -78,14 +78,14 @@ contract CreditManager is Ownable, Pausable, ReentrancyGuard {
                 _defaultSwapContract != address(0),
             "ZERO_ADDRESS_IS_NOT_ALLOWED"
         );
-        // AddressProvider addressProvider = AddressProvider(_addressProvider); // T:[CM-1]
-        poolService = _poolService; // T:[CM-1]
-        underlyingToken = IPoolService(_poolService).underlyingToken(); // T:[CM-1]
+        // AddressProvider addressProvider = AddressProvider(_addressProvider);
+        poolService = _poolService;
+        underlyingToken = IPoolService(_poolService).underlyingToken();
 
-        // wethAddress = addressProvider.getWethToken(); // T:[CM-1]
-        // wethGateway = addressProvider.getWETHGateway(); // T:[CM-1]
-        defaultSwapContract = _defaultSwapContract; // T:[CM-1]
-        accountFactory = IAccountFactory(_accountFactory); // T:[CM-1]
+        // wethAddress = addressProvider.getWethToken();
+        // wethGateway = addressProvider.getWETHGateway();
+        defaultSwapContract = _defaultSwapContract;
+        accountFactory = IAccountFactory(_accountFactory);
 
         _setParams(
             _minAmount,

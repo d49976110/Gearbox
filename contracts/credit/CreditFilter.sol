@@ -7,14 +7,17 @@ import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "../interfaces/ICreditManager.sol";
 import "../interfaces/IPoolService.sol";
+import "../libraries/helpers/Constants.sol";
 
 contract CreditFilter is Ownable, Pausable, ReentrancyGuard {
     address public creditManager;
     address public poolService;
     address public underlyingToken;
+    address public priceOracle;
 
     address[] public allowedTokens;
     mapping(address => bool) public isTokenAllowed;
+    mapping(address => uint256) public liquidationThresholds;
 
     mapping(address => uint256) public enabledTokens;
     mapping(address => uint256) public fastCheckCounter;
@@ -22,6 +25,19 @@ contract CreditFilter is Ownable, Pausable, ReentrancyGuard {
     modifier creditManagerOnly() {
         require(msg.sender == creditManager, "CREDIT_MANAGERS_ONLY");
         _;
+    }
+
+    constructor(address _priceOracle, address _underlyingToken) {
+        require(_underlyingToken != address(0), "ZERO_ADDRESS_IS_NOT_ALLOWED");
+
+        priceOracle = _priceOracle;
+
+        underlyingToken = _underlyingToken;
+
+        liquidationThresholds[underlyingToken] = Constants
+            .UNDERLYING_TOKEN_LIQUIDATION_THRESHOLD;
+
+        _allowToken(underlyingToken);
     }
 
     /// @dev credit manager will do this when open credit account
@@ -52,11 +68,15 @@ contract CreditFilter is Ownable, Pausable, ReentrancyGuard {
         );
     }
 
-    function allowToken(address token) external onlyOwner {
-        require(!isTokenAllowed[token], "ALREADY IN LIST");
+    function allowToken(address _token) external onlyOwner {
+        require(!isTokenAllowed[_token], "ALREADY IN LIST");
 
-        isTokenAllowed[token] = true;
-        allowedTokens.push(token);
+        _allowToken(_token);
+    }
+
+    function _allowToken(address _token) internal {
+        isTokenAllowed[_token] = true;
+        allowedTokens.push(_token);
     }
 
     function allowedTokensCount() external view returns (uint256) {
