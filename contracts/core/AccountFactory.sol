@@ -5,24 +5,28 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/proxy/Clones.sol";
+import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
 import "../credit/CreditAccount.sol";
 import "../interfaces/ICreditAccount.sol";
 
 contract AccountFactory is Ownable, Pausable, ReentrancyGuard {
+    using EnumerableSet for EnumerableSet.AddressSet;
+
+    address public masterCreditAccount;
     address public creditManager;
+    EnumerableSet.AddressSet private creditAccountsSet;
 
     address public head;
     address public tail;
     mapping(address => address) private _nextCreditAccount;
-
-    address public masterCreditAccount;
 
     event NewCreditAccount(address indexed account);
     event InitializeCreditAccount(
         address indexed account,
         address indexed creditManager
     );
+    event ReturnCreditAccount(address indexed account);
 
     modifier creditManagerOnly() {
         require(
@@ -32,10 +36,7 @@ contract AccountFactory is Ownable, Pausable, ReentrancyGuard {
         _;
     }
 
-    // todo : not finish other functions
-    constructor(address addressProvider) {
-        require(addressProvider != address(0), "ZERO_ADDRESS_IS_NOT_ALLOWED");
-
+    constructor() {
         // todo : build credit account contract
         masterCreditAccount = address(new CreditAccount());
         CreditAccount(masterCreditAccount).initialize();
@@ -45,7 +46,9 @@ contract AccountFactory is Ownable, Pausable, ReentrancyGuard {
         _nextCreditAccount[address(0)] = address(0);
     }
 
+    /// @dev set credit manager
     function setCreditManager(address _address) external onlyOwner {
+        require(_address != address(0), "ZERO_ADDRESS_IS_NOT_ALLOWED");
         creditManager = _address;
     }
 
@@ -71,14 +74,33 @@ contract AccountFactory is Ownable, Pausable, ReentrancyGuard {
         return result;
     }
 
-    // todo : understanding the EnumerableSet.AddressSet
+    function returnCreditAccount(address usedAccount)
+        external
+        creditManagerOnly
+    {
+        require(
+            creditAccountsSet.contains(usedAccount),
+            "AF_EXTERNAL_ACCOUNTS_ARE_FORBIDDEN"
+        );
+        require(
+            ICreditAccount(usedAccount).since() != block.number,
+            "AF_CANT_CLOSE_CREDIT_ACCOUNT_IN_THE_SAME_BLOCK"
+        );
+
+        // take the used account back in the end of the stock
+        _nextCreditAccount[tail] = usedAccount;
+        // change tail to the last
+        tail = usedAccount;
+        emit ReturnCreditAccount(usedAccount);
+    }
+
     function addCreditAccount() public {
         // use masterCreditAccount as implementation to create the new proxy contract
         address clonedAccount = Clones.clone(masterCreditAccount);
         ICreditAccount(clonedAccount).initialize();
         _nextCreditAccount[tail] = clonedAccount;
         tail = clonedAccount;
-        // creditAccountsSet.add(clonedAccount);
+        creditAccountsSet.add(clonedAccount);
         emit NewCreditAccount(clonedAccount);
     }
 

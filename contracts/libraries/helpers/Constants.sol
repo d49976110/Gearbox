@@ -10,4 +10,17 @@ library Constants {
 
     // leverage decimals
     uint8 constant LEVERAGE_DECIMALS = 100;
+
+    uint8 constant OPERATION_CLOSURE = 1;
+    uint8 constant OPERATION_REPAY = 2;
+    uint8 constant OPERATION_LIQUIDATION = 3;
+
+    // FEE = 10%
+    uint256 constant FEE_INTEREST = 1000; // 10%
+
+    // FEE + LIQUIDATION_FEE 2% = 200
+    uint256 constant FEE_LIQUIDATION = 200;
+
+    // Liquidation premium 5% = 9500
+    uint256 constant LIQUIDATION_DISCOUNTED_SUM = 9500;
 }

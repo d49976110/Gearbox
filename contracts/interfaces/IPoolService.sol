@@ -8,4 +8,10 @@ interface IPoolService {
 
     function lendCreditAccount(uint256 borrowedAmount, address creditAccount)
         external;
+
+    function repayCreditAccount(
+        uint256 borrowedAmount,
+        uint256 profit,
+        uint256 loss
+    ) external;
 }

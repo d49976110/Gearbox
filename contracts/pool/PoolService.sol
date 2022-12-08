@@ -5,7 +5,6 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "../core/AddressProvider.sol";
 import "../tokens/DieselToken.sol";
 import "../interfaces/IInterestRateModel.sol";
 import "../interfaces/ICreditManager.sol";
@@ -16,9 +15,6 @@ contract PoolService is Ownable, Pausable, ReentrancyGuard {
 
     address public underlyingToken;
     address public dieselToken;
-
-    // todo : why need this ?
-    uint256 public expectedLiquidityLimit;
 
     // last update liquidity
     uint256 public _expectedLiquidityLU;
@@ -34,7 +30,7 @@ contract PoolService is Ownable, Pausable, ReentrancyGuard {
     address[] public creditManagers;
 
     address public treasuryAddress;
-    AddressProvider public addressProvider;
+
     IInterestRateModel public interestRateModel;
 
     uint256 public withdrawFee;
@@ -73,29 +69,26 @@ contract PoolService is Ownable, Pausable, ReentrancyGuard {
     event NewCreditManagerConnected(address indexed creditManager);
     event UncoveredLoss(address indexed creditManager, uint256 loss);
 
+    ///@dev need to deploy diesel token address and interest model first
+    ///@param _underlyingToken put uni token : 0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984
     constructor(
-        address _addressProvider,
+        address _treasuryAddress,
         address _underlyingToken,
         address _dieselAddress,
-        address _interestRateModelAddress,
-        uint256 _expectedLiquidityLimit
+        address _interestRateModelAddress
     ) {
         require(
-            _addressProvider != address(0) &&
-                _underlyingToken != address(0) &&
+            _underlyingToken != address(0) &&
                 _dieselAddress != address(0) &&
                 _interestRateModelAddress != address(0),
             "ZERO_ADDRESS_IS_NOT_ALLOWED"
         );
 
-        addressProvider = AddressProvider(_addressProvider);
-
         underlyingToken = _underlyingToken;
         dieselToken = _dieselAddress;
-        treasuryAddress = addressProvider.getTreasuryContract();
+        treasuryAddress = _treasuryAddress;
 
         _updateInterestRateModel(_interestRateModelAddress);
-        expectedLiquidityLimit = _expectedLiquidityLimit;
     }
 
     // Add tokens to pool to get LP
@@ -105,11 +98,6 @@ contract PoolService is Ownable, Pausable, ReentrancyGuard {
         uint256 referralCode
     ) external whenNotPaused nonReentrant {
         require(onBehalfOf != address(0), "ZERO_ADDRESS_IS_NOT_ALLOWED");
-
-        require(
-            expectedLiquidity() + amount <= expectedLiquidityLimit,
-            "POOL_MORE_THAN_EXPECTED_LIQUIDITY_LIMIT"
-        );
 
         uint256 balanceBefore = IERC20(underlyingToken).balanceOf(
             address(this)
@@ -199,7 +187,7 @@ contract PoolService is Ownable, Pausable, ReentrancyGuard {
             "POOL_CONNECTED_CREDIT_MANAGERS_ONLY"
         );
 
-        // todo: why if there is loss the treasure should take ?
+        // ? why if there is any loss, the treasure address should pay for it
         // For fee surplus we mint tokens for treasury
         if (profit > 0) {
             DieselToken(dieselToken).mint(treasuryAddress, toDiesel(profit));
@@ -306,7 +294,7 @@ contract PoolService is Ownable, Pausable, ReentrancyGuard {
         return (expectedLiquidity() * Constants.RAY) / dieselSupply;
     }
 
-    // todo : why need this
+    // credit manager _calcClosePaymentsPure need this
     function calcLinearCumulative_RAY() public view returns (uint256) {
         uint256 timeDifference = block.timestamp - uint256(_timestampLU);
 
@@ -327,9 +315,6 @@ contract PoolService is Ownable, Pausable, ReentrancyGuard {
         //  newCumIndex  = currentCumIndex * | 1 + ------------------------------------ |
         //                                    \              SECONDS_PER_YEAR          /
         //
-        uint256 linearAccumulated_RAY = Constants.RAY +
-            ((currentBorrowRate_RAY * timeDifference) /
-                Constants.SECONDS_PER_YEAR);
 
         return
             (cumulativeIndex_RAY *

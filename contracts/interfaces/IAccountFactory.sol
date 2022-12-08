@@ -6,4 +6,6 @@ interface IAccountFactory {
         uint256 _borrowedAmount,
         uint256 _cumulativeIndexAtOpen
     ) external returns (address);
+
+    function returnCreditAccount(address usedAccount) external;
 }
