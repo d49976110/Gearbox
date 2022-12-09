@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "../interfaces/ICreditManager.sol";
+import "../interfaces/IPriceOracle.sol";
 import "../interfaces/IPoolService.sol";
 import "../libraries/helpers/Constants.sol";
 
@@ -59,8 +60,8 @@ contract CreditFilter is Ownable, Pausable, ReentrancyGuard {
             "CF_CREDIT_MANAGER_IS_ALREADY_SET"
         );
 
-        creditManager = _creditManager; // T:[CF-14]
-        poolService = ICreditManager(_creditManager).poolService(); //  T:[CF-14]
+        creditManager = _creditManager;
+        poolService = ICreditManager(_creditManager).poolService();
 
         require(
             IPoolService(poolService).underlyingToken() == underlyingToken,
@@ -83,7 +84,6 @@ contract CreditFilter is Ownable, Pausable, ReentrancyGuard {
         return allowedTokens.length;
     }
 
-    // todo : finish oracle
     function getCreditAccountTokenById(address creditAccount, uint256 id)
         public
         view
@@ -97,14 +97,13 @@ contract CreditFilter is Ownable, Pausable, ReentrancyGuard {
         token = allowedTokens[id];
         balance = IERC20(token).balanceOf(creditAccount);
 
-        // balance ==0 : T: [CF-28]
-        // if (balance > 1) {
-        //     tv = IPriceOracle(priceOracle).convert(
-        //         balance,
-        //         token,
-        //         underlyingToken
-        //     ); // T:[CF-28]
-        //     tvw = tv.mul(liquidationThresholds[token]); // T:[CF-28]
-        // }
+        if (balance > 1) {
+            tv = IPriceOracle(priceOracle).convert(
+                balance,
+                token,
+                underlyingToken
+            );
+            tvw = tv * liquidationThresholds[token];
+        }
     }
 }

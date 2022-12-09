@@ -3,6 +3,8 @@ pragma solidity ^0.8.17;
 
 library Constants {
     uint256 constant RAY = 1e27;
+    uint256 constant WAD = 1e18;
+
     uint256 constant SECONDS_PER_YEAR = 365 days;
 
     // max fee is 1 % , 100 = 1%

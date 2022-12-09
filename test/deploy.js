@@ -37,12 +37,13 @@ describe("Gear Box ", function () {
             interestModel.address
         );
 
-        // todo create oracle
         const PriceOracle = await ethers.getContractFactory("PriceOracle");
         priceOracle = await PriceOracle.deploy();
+        // todo oracle add price feed
 
         const CreditFilter = await ethers.getContractFactory("CreditFilter");
         creditFilter = await CreditFilter.deploy(priceOracle.address, coinA.address);
+        // todo add allow tokens & alliw adapter
 
         const AccountFactory = await ethers.getContractFactory("AccountFactory");
         accountFactory = await AccountFactory.deploy();
@@ -57,6 +58,9 @@ describe("Gear Box ", function () {
             uniSwapv2Router,
             accountFactory.address
         );
+        // todo creditManager set contract adapter
+
+        // todo creditFilter connectCreditManager
 
         await poolService.connectCreditManager(creditManager.address);
         expect(await poolService.creditManagersCanBorrow(owner.address)).to.eq(false);

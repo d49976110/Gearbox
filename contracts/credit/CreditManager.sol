@@ -201,6 +201,7 @@ contract CreditManager is Ownable, Pausable, ReentrancyGuard {
         emit CloseCreditAccount(msg.sender, to, remainingFunds); // T: [CM-44]
     }
 
+    /// @param target nedd to be adapter, like uniswap v2 router
     function executeOrder(
         address borrower,
         address target,
