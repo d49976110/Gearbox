@@ -22,7 +22,10 @@ contract PriceOracle is Ownable {
         address tokenFrom,
         address tokenTo
     ) external view returns (uint256) {
-        return amount * getLastPrice(tokenFrom, tokenTo);
+        // return amount * getLastPrice(tokenFrom, tokenTo);
+
+        // swap rate = 1 : 1
+        return amount * Constants.WAD;
     }
 
     // tokenFrom price / tokenTo Price
