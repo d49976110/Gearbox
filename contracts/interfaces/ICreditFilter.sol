@@ -20,4 +20,6 @@ interface ICreditFilter {
             uint256 tv,
             uint256 twv
         );
+
+    function checkAndEnableToken(address token) external view returns (bool);
 }

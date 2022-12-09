@@ -1,4 +1,5 @@
 require("@nomiclabs/hardhat-waffle");
+require("dotenv").config();
 
 module.exports = {
     solidity: {
@@ -19,5 +20,14 @@ module.exports = {
                 version: "0.6.0",
             },
         ],
+    },
+    networks: {
+        hardhat: {
+            forking: {
+                url: process.env.JSON_RPC_URL,
+                blockNumber: 16146300,
+            },
+            allowUnlimitedContractSize: true,
+        },
     },
 };

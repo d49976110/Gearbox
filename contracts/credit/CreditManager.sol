@@ -14,6 +14,7 @@ import "../interfaces/ICreditAccount.sol";
 import "../libraries/helpers/Constants.sol";
 import "../libraries/data/Types.sol";
 import "../libraries/math/PercentageMath.sol";
+import "hardhat/console.sol";
 
 // ! after deploy should set Adapter
 contract CreditManager is Ownable, Pausable, ReentrancyGuard {
@@ -201,6 +202,20 @@ contract CreditManager is Ownable, Pausable, ReentrancyGuard {
         emit CloseCreditAccount(msg.sender, to, remainingFunds); // T: [CM-44]
     }
 
+    function approve(address targetContract, address token)
+        external
+        whenNotPaused
+        nonReentrant
+    {
+        require(
+            contractToAdapter[targetContract] == true,
+            "Not Allowed Adapter"
+        );
+        address creditAccount = getCreditAccountOrRevert(msg.sender);
+
+        _provideCreditAccountAllowance(creditAccount, targetContract, token);
+    }
+
     /// @param target nedd to be adapter, like uniswap v2 router
     function executeOrder(
         address borrower,
@@ -216,6 +231,16 @@ contract CreditManager is Ownable, Pausable, ReentrancyGuard {
         address creditAccount = getCreditAccountOrRevert(borrower);
         emit ExecuteOrder(borrower, target);
         return ICreditAccount(creditAccount).execute(target, data);
+    }
+
+    function addCollateral(
+        address onBehalfOf,
+        address token,
+        uint256 amount
+    ) external whenNotPaused nonReentrant {
+        address creditAccount = getCreditAccountOrRevert(onBehalfOf);
+        require(creditFilter.checkAndEnableToken(token), "Not Allow Token");
+        IERC20(token).safeTransferFrom(msg.sender, creditAccount, amount);
     }
 
     function hasOpenedCreditAccount(address borrower)
@@ -316,14 +341,13 @@ contract CreditManager is Ownable, Pausable, ReentrancyGuard {
         return (amountToPool, remainingFunds);
     }
 
-    // todo : understand this func
     function _convertAllAssetsToUnderlying(
         address creditAccount,
         DataTypes.Exchange[] calldata paths
     ) internal {
-        uint256 tokenMask;
+        // uint256 tokenMask;
 
-        uint256 enabledTokens = creditFilter.enabledTokens(creditAccount);
+        // uint256 enabledTokens = creditFilter.enabledTokens(creditAccount);
 
         require(
             paths.length == creditFilter.allowedTokensCount(),
@@ -331,38 +355,34 @@ contract CreditManager is Ownable, Pausable, ReentrancyGuard {
         );
 
         for (uint256 i = 1; i < paths.length; i++) {
-            // ? why need mask ? and l:203 will always pass ?
-            tokenMask = 1 << i;
-            if (enabledTokens & tokenMask > 0) {
-                // i : the rank is the same as paths
-                (address tokenAddr, uint256 amount, , ) = creditFilter
-                    .getCreditAccountTokenById(creditAccount, i);
+            // i : the rank is the same as paths
+            (address tokenAddr, uint256 amount, , ) = creditFilter
+                .getCreditAccountTokenById(creditAccount, i);
 
-                if (amount > 1) {
-                    _provideCreditAccountAllowance(
-                        creditAccount,
-                        defaultSwapContract,
-                        tokenAddr
-                    );
+            if (amount > 1) {
+                _provideCreditAccountAllowance(
+                    creditAccount,
+                    defaultSwapContract,
+                    tokenAddr
+                );
 
-                    address[] memory currentPath = paths[i].path;
-                    currentPath[0] = tokenAddr;
-                    currentPath[paths[i].path.length - 1] = underlyingToken;
+                address[] memory currentPath = paths[i].path;
+                currentPath[0] = tokenAddr;
+                currentPath[paths[i].path.length - 1] = underlyingToken;
 
-                    bytes memory data = abi.encodeWithSelector(
-                        bytes4(0x38ed1739), // "swapExactTokensForTokens(uint256 amountIn ,uint256 amountOut,address[],address,uint256)",
-                        amount - 1,
-                        paths[i].amountOutMin,
-                        currentPath,
-                        creditAccount,
-                        block.timestamp
-                    );
+                bytes memory data = abi.encodeWithSelector(
+                    bytes4(0x38ed1739), // "swapExactTokensForTokens(uint256 amountIn ,uint256 amountOut,address[],address,uint256)",
+                    amount - 1,
+                    paths[i].amountOutMin,
+                    currentPath,
+                    creditAccount,
+                    block.timestamp
+                );
 
-                    ICreditAccount(creditAccount).execute(
-                        defaultSwapContract,
-                        data
-                    );
-                }
+                ICreditAccount(creditAccount).execute(
+                    defaultSwapContract,
+                    data
+                );
             }
         }
     }
@@ -445,15 +465,25 @@ contract CreditManager is Ownable, Pausable, ReentrancyGuard {
             uint256 loss
         )
     {
+        _borrowedAmount = borrowedAmount;
         // if liquidate , liquidation * liquidationDiscount
         uint256 totalFunds = isLiquidated
             ? (totalValue * liquidationDiscount) /
                 PercentageMath.PERCENTAGE_FACTOR
             : totalValue;
 
-        // borrow amount + interest should return back to the pool
-        uint256 borrowedAmountWithInterest = (borrowedAmount *
-            cumulativeIndexNow_RAY) / cumulativeIndexAtCreditAccountOpen_RAY;
+        uint256 borrowedAmountWithInterest;
+        if (
+            cumulativeIndexNow_RAY == 0 ||
+            cumulativeIndexAtCreditAccountOpen_RAY == 0
+        ) {
+            borrowedAmountWithInterest = borrowedAmount;
+        } else {
+            // borrow amount + interest should return back to the pool
+            borrowedAmountWithInterest =
+                (borrowedAmount * cumulativeIndexNow_RAY) /
+                cumulativeIndexAtCreditAccountOpen_RAY;
+        }
 
         if (totalFunds < borrowedAmountWithInterest) {
             // take all total funds to the pool

@@ -69,6 +69,15 @@ contract CreditFilter is Ownable, Pausable, ReentrancyGuard {
         );
     }
 
+    function checkAndEnableToken(address token)
+        external
+        view
+        creditManagerOnly
+        returns (bool)
+    {
+        return isTokenAllowed[token];
+    }
+
     function allowToken(address _token) external onlyOwner {
         require(!isTokenAllowed[_token], "ALREADY IN LIST");
 
