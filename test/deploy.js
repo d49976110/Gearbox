@@ -14,6 +14,7 @@ describe("Gear Box ", function () {
         accountFactory,
         creditManager,
         creditAccount;
+    let referralCode = 0;
     let minAmount = parseUnits("1", 18);
     let maxAmount = parseUnits("1000", 18);
     let maxLeverage = parseUnits("4", 2); // 400 = x4
@@ -79,7 +80,7 @@ describe("Gear Box ", function () {
         // todo creditManager set contract adapter
         await creditManager.setContractAdapter(uniSwapv2Router, true);
 
-        // creditFilter connect creditManager
+        // creditFilter connect creditManager & allow comp address
         await creditFilter.connectCreditManager(creditManager.address);
         await creditFilter.allowToken(CompAddress);
 
@@ -107,7 +108,7 @@ describe("Gear Box ", function () {
         });
 
         it("add liquidity ", async function () {
-            await poolService.addLiquidity(addLiquidityAmount, owner.address, 0);
+            await poolService.addLiquidity(addLiquidityAmount, owner.address, referralCode);
             expect(await dieselToken.balanceOf(owner.address)).to.eq(addLiquidityAmount);
             expect(await uni.balanceOf(owner.address)).to.eq(coinAmount.sub(addLiquidityAmount));
         });
@@ -118,18 +119,17 @@ describe("Gear Box ", function () {
         });
     });
 
-    describe("# Credit Manager", async () => {
+    describe("# Credit Manager - swap & close", async () => {
         before(async () => {
             await loadFixture(deployContractFixture);
-            await poolService.addLiquidity(addLiquidityAmount, owner.address, 0);
-            await poolService.removeLiquidity(removeLiquidityAmount, owner.address);
+            await poolService.addLiquidity(addLiquidityAmount, owner.address, referralCode);
         });
 
         it("open credit account", async () => {
-            await creditManager.openCreditAccount(openCreditAccount, owner.address, maxLeverage, 0);
+            await creditManager.openCreditAccount(openCreditAccount, owner.address, maxLeverage, referralCode);
             creditAccount = await creditManager.creditAccounts(owner.address);
             let [, balance, ,] = await creditFilter.getCreditAccountTokenById(creditAccount, 0);
-            expect(balance).to.eq(openCreditAccount.mul(5));
+            expect(balance).to.eq(openCreditAccount.mul(maxLeverage.add(100)).div(100)); // (max leverage + origin) / 100
         });
 
         it("executeOrder", async () => {
@@ -177,6 +177,50 @@ describe("Gear Box ", function () {
             let [, balance, ,] = await creditFilter.getCreditAccountTokenById(creditAccount, 0);
             expect(balance).to.eq(1);
             expect(await uni.balanceOf(owner.address)).to.gt(balanceBefore.add(amountOutMin));
+        });
+    });
+
+    describe("# Credit Manager - liquidate", async () => {
+        before(async () => {
+            await loadFixture(deployContractFixture);
+            await poolService.addLiquidity(addLiquidityAmount, owner.address, referralCode);
+        });
+
+        it("open credit account", async () => {
+            await creditManager.openCreditAccount(openCreditAccount, owner.address, maxLeverage, referralCode);
+            creditAccount = await creditManager.creditAccounts(owner.address);
+            let [, balance, ,] = await creditFilter.getCreditAccountTokenById(creditAccount, 0);
+            expect(balance).to.eq(openCreditAccount.mul(maxLeverage.add(100)).div(100));
+        });
+
+        it("executeOrder", async () => {
+            const amountOutMin = parseUnits("7.5", 18);
+
+            let uniBalance = await uni.balanceOf(creditAccount);
+            let path = [UniAddress, WETH, CompAddress];
+            const iface = new ethers.utils.Interface([
+                "function swapExactTokensForTokens(uint256 amountIn ,uint256 amountOut,address[],address,uint256)",
+            ]);
+            let data = iface.encodeFunctionData("swapExactTokensForTokens", [
+                uniBalance,
+                amountOutMin,
+                path,
+                creditAccount,
+                1670578680,
+            ]);
+
+            // approve
+            await creditManager.approve(uniSwapv2Router, UniAddress);
+
+            // executeOrder
+            expect(await comp.balanceOf(creditAccount)).to.eq(0);
+            await creditManager.executeOrder(owner.address, uniSwapv2Router, data);
+            expect(await comp.balanceOf(creditAccount)).to.gt(amountOutMin);
+        });
+
+        it("check health factor", async () => {
+            let healthFactor = await creditFilter.calcCreditAccountHealthFactor(creditAccount);
+            console.log("healthFactor", healthFactor);
         });
     });
 });

@@ -54,6 +54,12 @@ contract CreditManager is Ownable, Pausable, ReentrancyGuard {
         uint256 remainingFunds
     );
 
+    event LiquidateCreditAccount(
+        address indexed owner,
+        address indexed liquidator,
+        uint256 remainingFunds
+    );
+
     modifier allowedAdaptersOnly(address targetContract) {
         require(
             contractToAdapter[targetContract],
@@ -109,7 +115,7 @@ contract CreditManager is Ownable, Pausable, ReentrancyGuard {
         contractToAdapter[_address] = _bool;
     }
 
-    // todo : close , liquidate , repay func , exec order
+    // todo :   liquidate , repay func
     /// @dev In underlying, user should approve this contract first
     function openCreditAccount(
         uint256 amount,
@@ -168,6 +174,41 @@ contract CreditManager is Ownable, Pausable, ReentrancyGuard {
             borrowedAmount,
             referralCode
         );
+    }
+
+    function liquidateCreditAccount(
+        address borrower,
+        address to,
+        bool force
+    ) external whenNotPaused nonReentrant {
+        address creditAccount = getCreditAccountOrRevert(borrower);
+
+        // transfers assets to "to" address and compute total value (tv) & threshold weighted value (twv)
+        (uint256 totalValue, uint256 tvw) = _transferAssetsTo(
+            creditAccount,
+            to,
+            force
+        );
+
+        // Checks that current Hf < 1
+        require(
+            tvw <
+                creditFilter.calcCreditAccountAccruedInterest(creditAccount) *
+                    PercentageMath.PERCENTAGE_FACTOR,
+            "CM_CAN_LIQUIDATE_WITH_SUCH_HEALTH_FACTOR"
+        );
+
+        // Liquidate credit account
+        (, uint256 remainingFunds) = _closeCreditAccountImpl(
+            creditAccount,
+            Constants.OPERATION_LIQUIDATION,
+            totalValue,
+            borrower,
+            msg.sender,
+            to
+        ); // T:[CM-13]
+
+        emit LiquidateCreditAccount(borrower, msg.sender, remainingFunds); // T:[CM-13]
     }
 
     /*  
@@ -259,6 +300,37 @@ contract CreditManager is Ownable, Pausable, ReentrancyGuard {
         address result = creditAccounts[borrower];
         require(result != address(0), "CM_NO_OPEN_ACCOUNT");
         return result;
+    }
+
+    function _transferAssetsTo(
+        address creditAccount,
+        address to,
+        bool force
+    ) internal returns (uint256 totalValue, uint256 totalWeightedValue) {
+        require(to != address(0), "ZERO_ADDRESS_IS_NOT_ALLOWED");
+
+        for (uint256 i = 0; i < creditFilter.allowedTokensCount(); i++) {
+            (
+                address token,
+                uint256 amount,
+                uint256 tv,
+                uint256 tvw
+            ) = creditFilter.getCreditAccountTokenById(creditAccount, i);
+            if (amount > 1) {
+                if (
+                    _safeTokenTransfer(
+                        creditAccount,
+                        token,
+                        to,
+                        amount - 1,
+                        force
+                    )
+                ) {
+                    totalValue += tv;
+                    totalWeightedValue += tvw;
+                }
+            }
+        }
     }
 
     /// @param totalValue the balance of underlying after convert all assets to undeyling

@@ -90,6 +90,8 @@ contract PoolService is Ownable, Pausable, ReentrancyGuard {
         dieselToken = _dieselAddress;
         treasuryAddress = _treasuryAddress;
 
+        _cumulativeIndex_RAY = Constants.RAY;
+
         _updateInterestRateModel(_interestRateModelAddress);
     }
 
@@ -316,12 +318,11 @@ contract PoolService is Ownable, Pausable, ReentrancyGuard {
         uint256 cumulativeIndex_RAY,
         uint256 currentBorrowRate_RAY,
         uint256 timeDifference
-    ) public pure returns (uint256) {
+    ) public view returns (uint256) {
         //                                    /     currentBorrowRate * timeDifference \
         //  newCumIndex  = currentCumIndex * | 1 + ------------------------------------ |
         //                                    \              SECONDS_PER_YEAR          /
         //
-
         return
             (cumulativeIndex_RAY *
                 (Constants.RAY +

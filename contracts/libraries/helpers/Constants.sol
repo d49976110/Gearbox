@@ -28,4 +28,6 @@ library Constants {
 
     uint256 constant UNDERLYING_TOKEN_LIQUIDATION_THRESHOLD =
         LIQUIDATION_DISCOUNTED_SUM - FEE_LIQUIDATION;
+
+    uint256 constant PERCENTAGE_FACTOR = 1e4;
 }

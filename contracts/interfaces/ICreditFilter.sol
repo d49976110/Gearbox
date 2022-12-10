@@ -22,4 +22,9 @@ interface ICreditFilter {
         );
 
     function checkAndEnableToken(address token) external view returns (bool);
+
+    function calcCreditAccountAccruedInterest(address creditAccount)
+        external
+        view
+        returns (uint256);
 }

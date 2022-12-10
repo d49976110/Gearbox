@@ -17,6 +17,7 @@ contract PriceOracle is Ownable {
         }
     }
 
+    // todo change oracle to normal
     function convert(
         uint256 amount,
         address tokenFrom,

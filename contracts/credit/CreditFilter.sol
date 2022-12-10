@@ -6,9 +6,11 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "../interfaces/ICreditManager.sol";
+import "../interfaces/ICreditAccount.sol";
 import "../interfaces/IPriceOracle.sol";
 import "../interfaces/IPoolService.sol";
 import "../libraries/helpers/Constants.sol";
+import "hardhat/console.sol";
 
 contract CreditFilter is Ownable, Pausable, ReentrancyGuard {
     address public creditManager;
@@ -87,6 +89,9 @@ contract CreditFilter is Ownable, Pausable, ReentrancyGuard {
     function _allowToken(address _token) internal {
         isTokenAllowed[_token] = true;
         allowedTokens.push(_token);
+
+        liquidationThresholds[_token] = Constants
+            .UNDERLYING_TOKEN_LIQUIDATION_THRESHOLD;
     }
 
     function allowedTokensCount() external view returns (uint256) {
@@ -114,5 +119,44 @@ contract CreditFilter is Ownable, Pausable, ReentrancyGuard {
             );
             tvw = tv * liquidationThresholds[token];
         }
+    }
+
+    // heahth factor = sum(assets[i] * liquidation threshold[i]) / borrowed amount + interest accrued
+    function calcCreditAccountHealthFactor(address creditAccount)
+        public
+        view
+        returns (uint256)
+    {
+        console.log(
+            "AccruedInterest",
+            calcCreditAccountAccruedInterest(creditAccount)
+        );
+        return
+            calcThresholdWeightedValue(creditAccount) /
+            (calcCreditAccountAccruedInterest(creditAccount));
+    }
+
+    function calcThresholdWeightedValue(address creditAccount)
+        public
+        view
+        returns (uint256 total)
+    {
+        for (uint256 i = 0; i < allowedTokens.length; i++) {
+            (, , , uint256 twv) = getCreditAccountTokenById(creditAccount, i);
+            total += twv;
+        }
+        console.log("total", total);
+        return total;
+    }
+
+    function calcCreditAccountAccruedInterest(address creditAccount)
+        public
+        view
+        returns (uint256)
+    {
+        return
+            (ICreditAccount(creditAccount).borrowedAmount() *
+                IPoolService(poolService).calcLinearCumulative_RAY()) /
+            ICreditAccount(creditAccount).cumulativeIndexAtOpen();
     }
 }
