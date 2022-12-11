@@ -4,6 +4,7 @@ pragma solidity ^0.8.17;
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "../libraries/helpers/Constants.sol";
+import "hardhat/console.sol";
 
 contract PriceOracle is Ownable {
     mapping(address => address) public priceFeeds;
@@ -23,10 +24,10 @@ contract PriceOracle is Ownable {
         address tokenFrom,
         address tokenTo
     ) external view returns (uint256) {
-        // return amount * getLastPrice(tokenFrom, tokenTo);
+        return ((amount * getLastPrice(tokenFrom, tokenTo)) / Constants.WAD);
 
         // swap rate = 1 : 1
-        return amount * Constants.WAD;
+        // return amount * Constants.WAD;
     }
 
     // tokenFrom price / tokenTo Price
@@ -36,7 +37,6 @@ contract PriceOracle is Ownable {
         returns (uint256)
     {
         if (tokenFrom == tokenTo) return Constants.WAD;
-
         return (Constants.WAD * (_getPrice(tokenFrom))) / (_getPrice(tokenTo));
     }
 

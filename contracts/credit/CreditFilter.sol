@@ -110,13 +110,13 @@ contract CreditFilter is Ownable, Pausable, ReentrancyGuard {
     {
         token = allowedTokens[id];
         balance = IERC20(token).balanceOf(creditAccount);
-
         if (balance > 1) {
             tv = IPriceOracle(priceOracle).convert(
                 balance,
                 token,
                 underlyingToken
             );
+
             tvw = tv * liquidationThresholds[token];
         }
     }
@@ -127,12 +127,9 @@ contract CreditFilter is Ownable, Pausable, ReentrancyGuard {
         view
         returns (uint256)
     {
-        console.log(
-            "AccruedInterest",
-            calcCreditAccountAccruedInterest(creditAccount)
-        );
         return
-            calcThresholdWeightedValue(creditAccount) /
+            (calcThresholdWeightedValue(creditAccount) *
+                Constants.PERCENTAGE_FACTOR) /
             (calcCreditAccountAccruedInterest(creditAccount));
     }
 
@@ -145,8 +142,7 @@ contract CreditFilter is Ownable, Pausable, ReentrancyGuard {
             (, , , uint256 twv) = getCreditAccountTokenById(creditAccount, i);
             total += twv;
         }
-        console.log("total", total);
-        return total;
+        return total / Constants.PERCENTAGE_FACTOR;
     }
 
     function calcCreditAccountAccruedInterest(address creditAccount)

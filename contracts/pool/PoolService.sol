@@ -318,16 +318,23 @@ contract PoolService is Ownable, Pausable, ReentrancyGuard {
         uint256 cumulativeIndex_RAY,
         uint256 currentBorrowRate_RAY,
         uint256 timeDifference
-    ) public view returns (uint256) {
+    ) public pure returns (uint256) {
         //                                    /     currentBorrowRate * timeDifference \
         //  newCumIndex  = currentCumIndex * | 1 + ------------------------------------ |
         //                                    \              SECONDS_PER_YEAR          /
         //
+
         return
             (cumulativeIndex_RAY *
                 (Constants.RAY +
                     ((currentBorrowRate_RAY * timeDifference) /
                         Constants.SECONDS_PER_YEAR))) / Constants.RAY;
+
+        // uint256 linearAccumulated_RAY = Constants.RAY +
+        //     ((currentBorrowRate_RAY * (timeDifference)) /
+        //         (Constants.SECONDS_PER_YEAR));
+
+        // return cumulativeIndex_RAY * linearAccumulated_RAY;
     }
 
     function _updateInterestRateModel(address _interestRateModel) internal {

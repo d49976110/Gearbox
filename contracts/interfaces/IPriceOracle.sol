@@ -7,4 +7,9 @@ interface IPriceOracle {
         address tokenFrom,
         address tokenTo
     ) external view returns (uint256);
+
+    function getLastPrice(address tokenFrom, address tokenTo)
+        external
+        view
+        returns (uint256);
 }

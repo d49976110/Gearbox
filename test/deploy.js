@@ -1,4 +1,4 @@
-const { time, loadFixture, impersonateAccount } = require("@nomicfoundation/hardhat-network-helpers");
+const { loadFixture, impersonateAccount } = require("@nomicfoundation/hardhat-network-helpers");
 const { expect } = require("chai");
 const { parseUnits } = require("ethers/lib/utils");
 const { ethers } = require("hardhat");
@@ -30,6 +30,8 @@ describe("Gear Box ", function () {
     const USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
     const WETH = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
     const CompAddress = "0xc00e94Cb662C3520282E6f5717214004A7f26888";
+    const UniPriceFeed = "0x553303d460EE0afB37EdFf9bE42922D8FF63220e";
+    const CompPriceFeed = "0xdbd020CAeF83eFd542f4De03e3cF0C28A4428bd5";
     const Binance = "0xF977814e90dA44bFA03b6295A0616a897441aceC";
 
     async function deployContractFixture() {
@@ -59,7 +61,11 @@ describe("Gear Box ", function () {
 
         const PriceOracle = await ethers.getContractFactory("PriceOracle");
         priceOracle = await PriceOracle.deploy();
-        // todo oracle add price feed
+
+        // add price feed
+        let tokens = [UniAddress, CompAddress];
+        let priceFeeds = [UniPriceFeed, CompPriceFeed];
+        await priceOracle.addPriceFeed(tokens, priceFeeds);
 
         const CreditFilter = await ethers.getContractFactory("CreditFilter");
         creditFilter = await CreditFilter.deploy(priceOracle.address, uni.address);
@@ -193,34 +199,60 @@ describe("Gear Box ", function () {
             expect(balance).to.eq(openCreditAccount.mul(maxLeverage.add(100)).div(100));
         });
 
-        it("executeOrder", async () => {
-            const amountOutMin = parseUnits("7.5", 18);
-
-            let uniBalance = await uni.balanceOf(creditAccount);
-            let path = [UniAddress, WETH, CompAddress];
-            const iface = new ethers.utils.Interface([
-                "function swapExactTokensForTokens(uint256 amountIn ,uint256 amountOut,address[],address,uint256)",
-            ]);
-            let data = iface.encodeFunctionData("swapExactTokensForTokens", [
-                uniBalance,
-                amountOutMin,
-                path,
-                creditAccount,
-                1670578680,
-            ]);
-
-            // approve
-            await creditManager.approve(uniSwapv2Router, UniAddress);
-
-            // executeOrder
-            expect(await comp.balanceOf(creditAccount)).to.eq(0);
-            await creditManager.executeOrder(owner.address, uniSwapv2Router, data);
-            expect(await comp.balanceOf(creditAccount)).to.gt(amountOutMin);
+        it("swap many times let credit account can be liquidate", async () => {
+            let healthFactor = 20000;
+            while (healthFactor > 10000) {
+                await swapFromUniToComp();
+                await swapFromCompToUni();
+                healthFactor = await creditFilter.calcCreditAccountHealthFactor(creditAccount);
+            }
         });
 
-        it("check health factor", async () => {
-            let healthFactor = await creditFilter.calcCreditAccountHealthFactor(creditAccount);
-            console.log("healthFactor", healthFactor);
+        it("liquidate - addr1 to liquidate owner", async () => {
+            // approve
+            await uni.connect(addr1).approve(creditManager.address, ethers.constants.MaxUint256);
+            await creditManager.connect(addr1).liquidateCreditAccount(owner.address, addr1.address, true);
         });
     });
+
+    async function swapFromUniToComp() {
+        let uniBalance = await uni.balanceOf(creditAccount);
+        let path = [UniAddress, WETH, CompAddress];
+        const iface = new ethers.utils.Interface([
+            "function swapExactTokensForTokens(uint256 amountIn ,uint256 amountOut,address[],address,uint256)",
+        ]);
+        let data = iface.encodeFunctionData("swapExactTokensForTokens", [
+            uniBalance,
+            0,
+            path,
+            creditAccount,
+            1670579680,
+        ]);
+
+        // approve
+        await creditManager.approve(uniSwapv2Router, UniAddress);
+
+        // executeOrder
+        await creditManager.executeOrder(owner.address, uniSwapv2Router, data);
+    }
+
+    async function swapFromCompToUni() {
+        let compBalance = await comp.balanceOf(creditAccount);
+        let path = [CompAddress, WETH, UniAddress];
+        const iface = new ethers.utils.Interface([
+            "function swapExactTokensForTokens(uint256 amountIn ,uint256 amountOut,address[],address,uint256)",
+        ]);
+        let data = iface.encodeFunctionData("swapExactTokensForTokens", [
+            compBalance,
+            0,
+            path,
+            creditAccount,
+            1670579700,
+        ]);
+
+        // approve
+        await creditManager.approve(uniSwapv2Router, CompAddress);
+        // swap
+        await creditManager.executeOrder(owner.address, uniSwapv2Router, data);
+    }
 });
