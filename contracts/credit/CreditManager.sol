@@ -16,7 +16,6 @@ import "../libraries/data/Types.sol";
 import "../libraries/math/PercentageMath.sol";
 import "hardhat/console.sol";
 
-// ! after deploy should set Adapter
 contract CreditManager is Ownable, Pausable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -53,6 +52,8 @@ contract CreditManager is Ownable, Pausable, ReentrancyGuard {
         address indexed to,
         uint256 remainingFunds
     );
+
+    event RepayCreditAccount(address indexed owner, address indexed to);
 
     event LiquidateCreditAccount(
         address indexed owner,
@@ -176,6 +177,14 @@ contract CreditManager is Ownable, Pausable, ReentrancyGuard {
         );
     }
 
+    function repayCreditAccount(address to)
+        external
+        whenNotPaused
+        nonReentrant
+    {
+        _repayCreditAccountImpl(msg.sender, to);
+    }
+
     function liquidateCreditAccount(
         address borrower,
         address to,
@@ -183,7 +192,7 @@ contract CreditManager is Ownable, Pausable, ReentrancyGuard {
     ) external whenNotPaused nonReentrant {
         address creditAccount = getCreditAccountOrRevert(borrower);
 
-        // transfers assets to "to" address and compute total value (tv) & threshold weighted value (twv)
+        // transfer asset to liquidator, so liquidator need to approve first
         (uint256 totalValue, uint256 tvw) = _transferAssetsTo(
             creditAccount,
             to,
@@ -206,9 +215,9 @@ contract CreditManager is Ownable, Pausable, ReentrancyGuard {
             borrower,
             msg.sender,
             to
-        ); // T:[CM-13]
+        );
 
-        emit LiquidateCreditAccount(borrower, msg.sender, remainingFunds); // T:[CM-13]
+        emit LiquidateCreditAccount(borrower, msg.sender, remainingFunds);
     }
 
     /*  
@@ -331,6 +340,26 @@ contract CreditManager is Ownable, Pausable, ReentrancyGuard {
                 }
             }
         }
+    }
+
+    function _repayCreditAccountImpl(address borrower, address to)
+        internal
+        returns (uint256)
+    {
+        address creditAccount = getCreditAccountOrRevert(borrower);
+        (uint256 totalValue, ) = _transferAssetsTo(creditAccount, to, false);
+
+        (uint256 amountToPool, ) = _closeCreditAccountImpl(
+            creditAccount,
+            Constants.OPERATION_REPAY,
+            totalValue,
+            borrower,
+            borrower,
+            to
+        );
+
+        emit RepayCreditAccount(borrower, to);
+        return amountToPool;
     }
 
     /// @param totalValue the balance of underlying after convert all assets to undeyling

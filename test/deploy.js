@@ -4,7 +4,7 @@ const { parseUnits } = require("ethers/lib/utils");
 const { ethers } = require("hardhat");
 
 describe("Gear Box ", function () {
-    let owner, addr1, addr2, binance;
+    let owner, addr1, binance;
     let uni,
         dieselToken,
         interestModel,
@@ -27,7 +27,6 @@ describe("Gear Box ", function () {
     const treasuryAddress = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
     const uniSwapv2Router = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D";
     const UniAddress = "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984";
-    const USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
     const WETH = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
     const CompAddress = "0xc00e94Cb662C3520282E6f5717214004A7f26888";
     const UniPriceFeed = "0x553303d460EE0afB37EdFf9bE42922D8FF63220e";
@@ -44,6 +43,7 @@ describe("Gear Box ", function () {
         await impersonateAccount(Binance);
         binance = await ethers.getSigner(Binance);
         await uni.connect(binance).transfer(owner.address, coinAmount);
+        await uni.connect(binance).transfer(addr1.address, coinAmount);
 
         const DieselToken = await ethers.getContractFactory("DieselToken");
         dieselToken = await DieselToken.deploy("Diesel Uniswap Token", "DUNI");
@@ -186,6 +186,32 @@ describe("Gear Box ", function () {
         });
     });
 
+    describe("# Credit Manager - repay", async () => {
+        before(async () => {
+            await loadFixture(deployContractFixture);
+            await poolService.addLiquidity(addLiquidityAmount, owner.address, referralCode);
+        });
+
+        it("open credit account", async () => {
+            await creditManager.openCreditAccount(openCreditAccount, owner.address, maxLeverage, referralCode);
+            creditAccount = await creditManager.creditAccounts(owner.address);
+            let [, balance, ,] = await creditFilter.getCreditAccountTokenById(creditAccount, 0);
+            expect(balance).to.eq(openCreditAccount.mul(maxLeverage.add(100)).div(100));
+        });
+
+        it("swap from uni to comp", async () => {
+            expect(await swapFromUniToComp())
+                .to.emit(creditManager, "ExecuteOrder")
+                .withArgs(owner.address, uniSwapv2Router);
+        });
+
+        it("repay uni to get comp back ", async () => {
+            let beforeBalance = await comp.balanceOf(owner.address);
+            await creditManager.repayCreditAccount(owner.address);
+            expect(await comp.balanceOf(owner.address)).to.gt(beforeBalance);
+        });
+    });
+
     describe("# Credit Manager - liquidate", async () => {
         before(async () => {
             await loadFixture(deployContractFixture);
@@ -201,17 +227,27 @@ describe("Gear Box ", function () {
 
         it("swap many times let credit account can be liquidate", async () => {
             let healthFactor = 20000;
+
             while (healthFactor > 10000) {
-                await swapFromUniToComp();
-                await swapFromCompToUni();
+                expect(await swapFromUniToComp())
+                    .to.emit(creditManager, "ExecuteOrder")
+                    .withArgs(owner.address, uniSwapv2Router);
+
+                expect(await swapFromCompToUni())
+                    .to.emit(creditManager, "ExecuteOrder")
+                    .withArgs(owner.address, uniSwapv2Router);
+
                 healthFactor = await creditFilter.calcCreditAccountHealthFactor(creditAccount);
             }
         });
 
         it("liquidate - addr1 to liquidate owner", async () => {
+            let beforeBalance = await comp.balanceOf(addr1.address);
+
             // approve
             await uni.connect(addr1).approve(creditManager.address, ethers.constants.MaxUint256);
             await creditManager.connect(addr1).liquidateCreditAccount(owner.address, addr1.address, true);
+            expect(await uni.balanceOf(addr1.address)).to.gt(beforeBalance);
         });
     });
 
