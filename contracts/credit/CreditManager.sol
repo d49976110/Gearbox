@@ -270,7 +270,9 @@ contract CreditManager is Ownable, Pausable, ReentrancyGuard {
     function executeOrder(
         address borrower,
         address target,
-        bytes memory data
+        uint256 amountIn,
+        uint256 amountOut,
+        address[] calldata paths
     )
         external
         allowedAdaptersOnly(target)
@@ -278,8 +280,22 @@ contract CreditManager is Ownable, Pausable, ReentrancyGuard {
         nonReentrant
         returns (bytes memory)
     {
+        require(
+            creditFilter.isTokenAllowed(paths[0]) &&
+                creditFilter.isTokenAllowed(paths[paths.length - 1]),
+            "Not Allowed Token"
+        );
         address creditAccount = getCreditAccountOrRevert(borrower);
         emit ExecuteOrder(borrower, target);
+
+        bytes memory data = abi.encodeWithSelector(
+            bytes4(0x38ed1739), // "swapExactTokensForTokens(uint256 amountIn ,uint256 amountOut,address[],address,uint256)",
+            amountIn,
+            amountOut,
+            paths,
+            creditAccount,
+            block.timestamp
+        );
         return ICreditAccount(creditAccount).execute(target, data);
     }
 
@@ -289,7 +305,7 @@ contract CreditManager is Ownable, Pausable, ReentrancyGuard {
         uint256 amount
     ) external whenNotPaused nonReentrant {
         address creditAccount = getCreditAccountOrRevert(onBehalfOf);
-        require(creditFilter.checkAndEnableToken(token), "Not Allow Token");
+        require(creditFilter.isTokenAllowed(token), "Not Allowed Token");
         IERC20(token).safeTransferFrom(msg.sender, creditAccount, amount);
     }
 

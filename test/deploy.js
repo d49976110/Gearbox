@@ -25,7 +25,7 @@ describe("Gear Box ", function () {
     let addCollateralAmount = parseUnits("1", 18);
 
     const treasuryAddress = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
-    const uniSwapv2Router = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D";
+    const uniSwapV2Router = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D";
     const UniAddress = "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984";
     const WETH = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
     const CompAddress = "0xc00e94Cb662C3520282E6f5717214004A7f26888";
@@ -80,11 +80,11 @@ describe("Gear Box ", function () {
             maxLeverage,
             poolService.address,
             creditFilter.address,
-            uniSwapv2Router,
+            uniSwapV2Router,
             accountFactory.address
         );
         // todo creditManager set contract adapter
-        await creditManager.setContractAdapter(uniSwapv2Router, true);
+        await creditManager.setContractAdapter(uniSwapV2Router, true);
 
         // creditFilter connect creditManager & allow comp address
         await creditFilter.connectCreditManager(creditManager.address);
@@ -138,28 +138,30 @@ describe("Gear Box ", function () {
             expect(balance).to.eq(openCreditAccount.mul(maxLeverage.add(100)).div(100)); // (max leverage + origin) / 100
         });
 
+        it("executeOrder should revert : Not Allowed Token", async () => {
+            const amountOutMin = parseUnits("7.5", 18);
+
+            let uniBalance = await uni.balanceOf(creditAccount);
+            let path = [owner.address, WETH, CompAddress];
+
+            // executeOrder
+            await expect(
+                creditManager.executeOrder(owner.address, uniSwapV2Router, uniBalance, amountOutMin, path)
+            ).to.be.revertedWith("Not Allowed Token");
+        });
+
         it("executeOrder", async () => {
             const amountOutMin = parseUnits("7.5", 18);
 
             let uniBalance = await uni.balanceOf(creditAccount);
             let path = [UniAddress, WETH, CompAddress];
-            const iface = new ethers.utils.Interface([
-                "function swapExactTokensForTokens(uint256 amountIn ,uint256 amountOut,address[],address,uint256)",
-            ]);
-            let data = iface.encodeFunctionData("swapExactTokensForTokens", [
-                uniBalance,
-                amountOutMin,
-                path,
-                creditAccount,
-                1670578680,
-            ]);
 
             // approve
-            await creditManager.approve(uniSwapv2Router, UniAddress);
+            await creditManager.approve(uniSwapV2Router, UniAddress);
 
             // executeOrder
             expect(await comp.balanceOf(creditAccount)).to.eq(0);
-            await creditManager.executeOrder(owner.address, uniSwapv2Router, data);
+            await creditManager.executeOrder(owner.address, uniSwapV2Router, uniBalance, amountOutMin, path);
             expect(await comp.balanceOf(creditAccount)).to.gt(amountOutMin);
         });
 
@@ -199,10 +201,10 @@ describe("Gear Box ", function () {
             expect(balance).to.eq(openCreditAccount.mul(maxLeverage.add(100)).div(100));
         });
 
-        it("swap from uni to comp", async () => {
+        it("swap from Uni to Comp", async () => {
             expect(await swapFromUniToComp())
                 .to.emit(creditManager, "ExecuteOrder")
-                .withArgs(owner.address, uniSwapv2Router);
+                .withArgs(owner.address, uniSwapV2Router);
         });
 
         it("repay uni to get comp back ", async () => {
@@ -231,11 +233,11 @@ describe("Gear Box ", function () {
             while (healthFactor > 10000) {
                 expect(await swapFromUniToComp())
                     .to.emit(creditManager, "ExecuteOrder")
-                    .withArgs(owner.address, uniSwapv2Router);
+                    .withArgs(owner.address, uniSwapV2Router);
 
                 expect(await swapFromCompToUni())
                     .to.emit(creditManager, "ExecuteOrder")
-                    .withArgs(owner.address, uniSwapv2Router);
+                    .withArgs(owner.address, uniSwapV2Router);
 
                 healthFactor = await creditFilter.calcCreditAccountHealthFactor(creditAccount);
             }
@@ -254,41 +256,21 @@ describe("Gear Box ", function () {
     async function swapFromUniToComp() {
         let uniBalance = await uni.balanceOf(creditAccount);
         let path = [UniAddress, WETH, CompAddress];
-        const iface = new ethers.utils.Interface([
-            "function swapExactTokensForTokens(uint256 amountIn ,uint256 amountOut,address[],address,uint256)",
-        ]);
-        let data = iface.encodeFunctionData("swapExactTokensForTokens", [
-            uniBalance,
-            0,
-            path,
-            creditAccount,
-            1670579680,
-        ]);
 
         // approve
-        await creditManager.approve(uniSwapv2Router, UniAddress);
+        await creditManager.approve(uniSwapV2Router, UniAddress);
 
         // executeOrder
-        await creditManager.executeOrder(owner.address, uniSwapv2Router, data);
+        await creditManager.executeOrder(owner.address, uniSwapV2Router, uniBalance, 0, path);
     }
 
     async function swapFromCompToUni() {
         let compBalance = await comp.balanceOf(creditAccount);
         let path = [CompAddress, WETH, UniAddress];
-        const iface = new ethers.utils.Interface([
-            "function swapExactTokensForTokens(uint256 amountIn ,uint256 amountOut,address[],address,uint256)",
-        ]);
-        let data = iface.encodeFunctionData("swapExactTokensForTokens", [
-            compBalance,
-            0,
-            path,
-            creditAccount,
-            1670579700,
-        ]);
 
         // approve
-        await creditManager.approve(uniSwapv2Router, CompAddress);
+        await creditManager.approve(uniSwapV2Router, CompAddress);
         // swap
-        await creditManager.executeOrder(owner.address, uniSwapv2Router, data);
+        await creditManager.executeOrder(owner.address, uniSwapV2Router, compBalance, 0, path);
     }
 });

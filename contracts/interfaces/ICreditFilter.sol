@@ -2,6 +2,8 @@
 pragma solidity ^0.8.17;
 
 interface ICreditFilter {
+    function isTokenAllowed(address token) external view returns (bool);
+
     function initEnabledTokens(address creditAccount) external;
 
     function enabledTokens(address creditAccount)
